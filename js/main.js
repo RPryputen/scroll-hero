@@ -1,23 +1,45 @@
 /* =========================================================
    main.js
-   1) Прогресс прокрутки hero -> CSS-переменная --p (0…1)
+   1) Прогресс прокрутки hero -> CSS-переменные --p / --e / --out
       с инерцией (lerp), чтобы движение было «дорогим», плавным.
-   2) Параллакс от курсора -> --mx / --my.
-   3) Появление секций по прокрутке (IntersectionObserver).
-   Всё пишется в CSS-переменные внутри одного requestAnimationFrame.
+   2) Отрисовка 3D-ядра (js/core.js) в том же кадре.
+   3) Параллакс от курсора -> --mx / --my.
+   4) Появление секций по прокрутке (IntersectionObserver).
+   Один requestAnimationFrame на всё.
    ========================================================= */
 (function () {
   'use strict';
 
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  var scene   = document.getElementById('heroScene');
-  var hero    = document.getElementById('hero');
-  var nav     = document.getElementById('nav');
-  var bar     = document.querySelector('.progress__bar');
-  var canvas  = document.getElementById('constellation');
+  var scene    = document.getElementById('heroScene');
+  var hero     = document.getElementById('hero');
+  var nav      = document.getElementById('nav');
+  var bar      = document.querySelector('.progress__bar');
+  var canvas   = document.getElementById('constellation');
+  var coreCvs  = document.getElementById('core');
+  var coreAnchor = document.getElementById('coreAnchor');
 
   if (canvas && window.initConstellation) window.initConstellation(canvas);
+
+  var core = (coreCvs && window.initCore && !reduced) ? window.initCore(coreCvs) : null;
+
+  /* ---------- Привязка ядра к разрыву в заголовке ----------
+     Ядро должно оказаться ровно между строками-шторами, поэтому
+     целимся в центр пустого .line-gap. Трансформы на layout не
+     влияют, так что достаточно мерить при ресайзе. */
+  function anchor() {
+    if (!hero || !coreAnchor) return;
+    var hr = hero.getBoundingClientRect();
+    var lr = coreAnchor.getBoundingClientRect();
+    var cy = lr.top + lr.height / 2 - hr.top;
+    hero.style.setProperty('--cy', cy.toFixed(1) + 'px');
+    if (core) core.setAnchor(cy);
+  }
+  window.addEventListener('resize', anchor, { passive: true });
+  window.addEventListener('load', anchor);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(anchor);
+  anchor();
 
   /* ---------- 1. Прогресс прокрутки ---------- */
   var target = 0;   // целевое значение прогресса
@@ -53,7 +75,7 @@
   /* ---------- Единый кадр отрисовки ---------- */
   var EASE = 0.12;   // инерция: меньше — «тяжелее» и плавнее
 
-  function frame() {
+  function frame(time) {
     measure();
 
     if (reduced) {
@@ -71,8 +93,17 @@
       hero.style.setProperty('--p',  current.toFixed(4));
       hero.style.setProperty('--mx', mx.toFixed(3));
       hero.style.setProperty('--my', my.toFixed(3));
+
+      // раскадровку ядра считает core.js — CSS читает те же значения
+      if (window.heroStory) {
+        var st = window.heroStory(current);
+        hero.style.setProperty('--e',   st.explode.toFixed(4));
+        hero.style.setProperty('--out', st.out.toFixed(4));
+      }
     }
     if (bar) bar.style.setProperty('--sp', pageCurrent.toFixed(4));
+
+    if (core) core.render(current, mx, my, time || 0);
 
     requestAnimationFrame(frame);
   }

@@ -1,7 +1,13 @@
 /* =========================================================
    Hero block · dark / premium · scroll-driven animation
-   Переменная --p (0…1) выставляется из js/main.js на .hero
-   и управляет всей раскадровкой прокрутки через calc().
+
+   Из js/main.js на .hero приходят переменные:
+     --p    прогресс прокрутки сцены        0…1
+     --e    «раскрытие» ядра (раскадровка)  0…1
+     --out  общее растворение в конце       0…1
+     --cy   центр 3D-ядра в px от верха hero
+     --mx / --my  параллакс от курсора      -1…1
+   Всю раскадровку дальше считает CSS через calc().
    ========================================================= */
 
 :root {
@@ -32,7 +38,6 @@ body {
   font-family: var(--font);
   line-height: 1.5;
   overflow-x: hidden;
-  /* мягкое зерно/винетка по краям страницы */
   background-image:
     radial-gradient(120% 60% at 50% -10%, rgba(124, 92, 255, .18), transparent 60%),
     radial-gradient(80% 50% at 100% 100%, rgba(75, 123, 255, .10), transparent 60%);
@@ -112,10 +117,9 @@ a { color: inherit; text-decoration: none; }
 
 /* =========================================================
    HERO
-   .hero-scene задаёт «длину» анимации, .hero липнет на экране
    ========================================================= */
 .hero-scene {
-  height: 260vh;              /* дистанция прокрутки для раскадровки */
+  height: 340vh;              /* дистанция прокрутки для раскадровки */
   position: relative;
   z-index: 0;
 }
@@ -127,14 +131,19 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   display: grid;
   place-items: center;
-  --p: 0;                     /* прогресс прокрутки 0…1 */
-  --mx: 0;                    /* параллакс от курсора */
+  --p: 0;
+  --e: 0;
+  --out: 0;
+  --cy: 50vh;
+  --mx: 0;
   --my: 0;
 }
 
+/* ---------- Фоновые слои (z 0…1) ---------- */
 .hero__canvas {
   position: absolute;
   inset: 0;
+  z-index: 0;
   width: 100%;
   height: 100%;
   opacity: calc(1 - var(--p) * .85);
@@ -146,19 +155,42 @@ a { color: inherit; text-decoration: none; }
 .hero__glow {
   position: absolute;
   left: 50%;
-  top: 42%;
+  top: var(--cy);
+  z-index: 0;
   width: 120vmax;
   height: 120vmax;
   transform: translate(-50%, -50%) scale(calc(1 + var(--p) * .9));
   background:
-    radial-gradient(closest-side, rgba(124, 92, 255, .22), rgba(124, 92, 255, .06) 45%, transparent 70%);
-  opacity: calc(1 - var(--p) * .7);
+    radial-gradient(closest-side, rgba(124, 92, 255, .24), rgba(124, 92, 255, .06) 45%, transparent 70%);
+  opacity: calc(1 - var(--out));
   pointer-events: none;
+}
+
+/* Гигантское слово-подложка: именно его перекрывает ядро —
+   это и есть главный признак глубины (как шлем поверх имени) */
+.ghost {
+  position: absolute;
+  left: 50%;
+  top: var(--cy);
+  z-index: 2;
+  font-size: clamp(90px, 19vw, 300px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+  color: #fff;
+  opacity: calc((.075 + var(--e) * .06) * (1 - var(--out)));
+  transform:
+    translate(-50%, -50%)
+    translate3d(calc(var(--mx) * -26px), 0, 0)
+    scale(calc(1 + var(--p) * .35));
+  pointer-events: none;
+  user-select: none;
 }
 
 .hero__grain {
   position: absolute;
   inset: -50%;
+  z-index: 1;
   pointer-events: none;
   opacity: .035;
   background-image: radial-gradient(rgba(255, 255, 255, .9) 1px, transparent 1px);
@@ -166,71 +198,20 @@ a { color: inherit; text-decoration: none; }
   mix-blend-mode: screen;
 }
 
-.hero__inner {
-  position: relative;
-  z-index: 2;
-  width: min(1180px, 92vw);
-  padding-top: 6vh;
-  display: grid;
-  justify-items: center;
-  text-align: center;
-}
-
-/* ---------- Визуал: кристалл + карточки ---------- */
-.visual {
-  position: relative;
-  width: min(900px, 92vw);
-  height: clamp(230px, 34vh, 330px);
-  margin-bottom: clamp(8px, 3vh, 34px);
-  transform: translate3d(0, calc(var(--p) * -70px), 0);
-}
-
-.visual__wires {
+/* ---------- 3D-ядро (z 3) ---------- */
+.core {
   position: absolute;
   inset: 0;
+  z-index: 3;
   width: 100%;
   height: 100%;
-  opacity: calc(.5 - var(--p) * .5);
-}
-.visual__wires path {
-  fill: none;
-  stroke: rgba(183, 155, 255, .55);
-  stroke-width: 1;
-  stroke-dasharray: 4 6;
-  animation: dash 14s linear infinite;
-}
-.visual__wires circle { fill: rgba(183, 155, 255, .9); }
-@keyframes dash { to { stroke-dashoffset: -200; } }
-
-/* кристалл */
-.crystal {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: clamp(200px, 24vw, 290px);
-  aspect-ratio: 1;
-  transform:
-    translate(-50%, -50%)
-    translate3d(calc(var(--mx) * 10px), calc(var(--my) * 10px), 0)
-    scale(calc(1 + var(--p) * .75))
-    rotate(calc(var(--p) * 14deg));
-  filter: drop-shadow(0 24px 70px rgba(124, 92, 255, .55));
-  opacity: calc(1 - (var(--p) - .55) * 2.2);
-}
-.crystal svg { animation: float 9s ease-in-out infinite; }
-.crystal__shine { animation: shine 6s ease-in-out infinite; }
-@keyframes float {
-  0%, 100% { transform: translateY(-8px) rotate(-1deg); }
-  50%      { transform: translateY(8px)  rotate(1.5deg); }
-}
-@keyframes shine {
-  0%, 100% { opacity: .55; }
-  50%      { opacity: 1; }
+  pointer-events: none;
 }
 
-/* плавающие карточки */
+/* ---------- Панели-телеметрия (z 2, за ядром) ---------- */
 .card {
   position: absolute;
+  z-index: 2;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -245,24 +226,24 @@ a { color: inherit; text-decoration: none; }
 }
 
 .card--crm {
-  left: 2%;
-  top: 6%;
-  width: clamp(190px, 24vw, 250px);
+  left: 4%;
+  top: 18%;
+  width: clamp(190px, 22vw, 250px);
   transform:
-    translate3d(calc(var(--p) * -190px + var(--mx) * 18px),
-                calc(var(--p) * -120px + var(--my) * 18px), 0)
-    rotate(calc(var(--p) * -9deg))
+    translate3d(calc(var(--p) * -260px + var(--mx) * 18px),
+                calc(var(--p) * -140px + var(--my) * 18px), 0)
+    rotate(calc(var(--p) * -10deg))
     scale(calc(1 - var(--p) * .12));
   animation: bobA 11s ease-in-out infinite;
 }
 .card--chat {
-  right: 4%;
-  top: 30%;
-  width: clamp(170px, 21vw, 215px);
+  right: 5%;
+  top: 26%;
+  width: clamp(170px, 19vw, 215px);
   transform:
-    translate3d(calc(var(--p) * 200px + var(--mx) * -16px),
-                calc(var(--p) * 100px + var(--my) * -16px), 0)
-    rotate(calc(var(--p) * 8deg))
+    translate3d(calc(var(--p) * 270px + var(--mx) * -16px),
+                calc(var(--p) * 120px + var(--my) * -16px), 0)
+    rotate(calc(var(--p) * 9deg))
     scale(calc(1 - var(--p) * .12));
   animation: bobB 13s ease-in-out infinite;
 }
@@ -338,56 +319,67 @@ a { color: inherit; text-decoration: none; }
   text-align: center;
 }
 
-.tools {
+/* ---------- Подписи модулей (z 4) ---------- */
+.modules {
   position: absolute;
-  display: grid;
-  gap: 10px;
-  padding: 9px 7px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  backdrop-filter: blur(10px);
-  font-size: 11px;
-  color: var(--ink-dim);
-  opacity: calc(.9 - var(--p) * 1.9);
+  left: 50%;
+  top: var(--cy);
+  z-index: 4;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%) scale(var(--ms, 1));
+  pointer-events: none;
 }
-.tools--left {
-  left: 0; top: 40%;
-  transform: translate3d(calc(var(--p) * -240px + var(--mx) * 24px), calc(var(--my) * 24px), 0);
-}
-.tools--right {
-  right: 0; top: 12%;
-  transform: translate3d(calc(var(--p) * 240px + var(--mx) * -22px), calc(var(--my) * -22px), 0);
-}
-.tools span {
-  display: grid;
-  place-items: center;
-  width: 22px; height: 22px;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, .05);
-}
-.tools__ai {
-  color: var(--ink) !important;
-  font-size: 9px;
-  font-weight: 700;
-  background: linear-gradient(140deg, var(--violet), var(--blue)) !important;
+.module {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  font-size: 10.5px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--ink);
+  padding: 8px 14px;
+  border: 1px solid rgba(183, 155, 255, .35);
+  border-radius: 999px;
+  background: rgba(11, 8, 24, .62);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 24px rgba(124, 92, 255, .18);
+  /* появляются со сдвигом по --t: подписи «зажигаются» по очереди */
+  opacity: calc((var(--e) * 2.2 - .5 - var(--t) * .16) * (1 - var(--out)));
+  transform:
+    translate(-50%, -50%)
+    translate(calc(var(--x) * var(--e) * 1px), calc(var(--y) * var(--e) * 1px))
+    scale(calc(.7 + var(--e) * .3));
 }
 
-/* ---------- Текст ---------- */
-.hero__content {
+/* ---------- Контент (z 4) ---------- */
+/* z-index: auto — важно: .hero__inner не должен создавать
+   контекст наложения, иначе строки заголовка не смогут
+   разойтись «до» и «после» canvas-ядра. */
+.hero__inner {
   position: relative;
-  filter: blur(calc(var(--p) * 7px));
+  z-index: auto;
+  width: min(1180px, 92vw);
+  display: grid;
+  justify-items: center;
+  text-align: center;
 }
 
 .hero__eyebrow {
+  position: relative;
+  z-index: 4;
   font-size: 11px;
   letter-spacing: .28em;
   text-transform: uppercase;
   color: var(--ink-dim);
-  margin-bottom: 18px;
-  opacity: calc(1 - var(--p) * 2.4);
-  transform: translate3d(0, calc(var(--p) * -30px), 0);
-  animation: rise .9s var(--ease) .1s both;
+  margin-bottom: 22px;
+  opacity: calc(1 - var(--p) * 3);
+  transform: translate3d(0, calc(var(--p) * -60px), 0);
+  /* backwards, а не both: анимация имеет приоритет над обычными
+     объявлениями, и при both её конечный кадр навсегда перебил бы
+     transform/opacity, привязанные к прокрутке */
+  animation: rise .9s var(--ease) .1s backwards;
 }
 .hero__eyebrow span { color: var(--violet-lt); }
 
@@ -398,15 +390,30 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: -.01em;
   text-transform: uppercase;
 }
-.line { display: block; }
+
+/* Строки-«шторы»: расходятся вверх и вниз, открывая ядро.
+   Обе перед ядром (z 4) — иначе непрозрачный объект закрыл бы текст. */
+.line {
+  display: block;
+  position: relative;
+  z-index: 4;
+  transform: translate3d(0, calc(var(--p) * var(--dir, 0) * 165px), 0);
+  opacity: calc(1 - var(--p) * 1.7);
+  text-shadow: 0 6px 40px rgba(5, 4, 10, .9);
+}
+
+/* Пустое место в потоке заголовка, где живёт 3D-ядро */
+.line-gap {
+  display: block;
+  height: clamp(180px, 28vh, 320px);
+}
+
 .word {
   display: inline-block;
   overflow: hidden;
   vertical-align: bottom;
   padding: .06em .16em .12em 0;   /* запас, чтобы маска не срезала буквы */
   margin-bottom: -.12em;
-  transform: translate3d(0, calc(var(--p) * (-40px - var(--i) * 7px)), 0);
-  opacity: calc(1 - (var(--p) * 2.3 - var(--i) * .1));
 }
 .word > span {
   display: inline-block;
@@ -425,24 +432,28 @@ a { color: inherit; text-decoration: none; }
 }
 
 .hero__sub {
+  position: relative;
+  z-index: 4;
   max-width: 620px;
-  margin: 20px auto 0;
+  margin: 24px auto 0;
   font-size: clamp(13px, 1.15vw, 15px);
   color: var(--ink-dim);
-  opacity: calc(1 - var(--p) * 2.6);
-  transform: translate3d(0, calc(var(--p) * -22px), 0);
-  animation: rise 1s var(--ease) .75s both;
+  opacity: calc(1 - var(--p) * 3.4);
+  transform: translate3d(0, calc(var(--p) * 60px), 0);
+  animation: rise 1s var(--ease) .75s backwards;
 }
 
 .hero__actions {
+  position: relative;
+  z-index: 4;
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   justify-content: center;
   margin-top: 30px;
-  opacity: calc(1 - var(--p) * 2.8);
-  transform: translate3d(0, calc(var(--p) * -14px), 0);
-  animation: rise 1s var(--ease) .9s both;
+  opacity: calc(1 - var(--p) * 3.8);
+  transform: translate3d(0, calc(var(--p) * 80px), 0);
+  animation: rise 1s var(--ease) .9s backwards;
 }
 .btn {
   position: relative;
@@ -478,9 +489,14 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: .26em;
   text-transform: uppercase;
   color: var(--ink-dim);
-  z-index: 3;
-  opacity: calc(1 - var(--p) * 5);
-  animation: rise 1s var(--ease) 1.2s both;
+  z-index: 5;
+  opacity: calc(1 - var(--p) * 6);
+  /* свои кадры: общий rise затёр бы центрирующий translateX(-50%) */
+  animation: riseHint 1s var(--ease) 1.2s backwards;
+}
+@keyframes riseHint {
+  from { opacity: 0; transform: translateX(-50%) translateY(22px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 .hero__hint-line {
   width: 1px;
@@ -577,22 +593,34 @@ a { color: inherit; text-decoration: none; }
 .reveal.is-visible { opacity: 1; transform: none; }
 
 /* ---------- Адаптив ---------- */
+@media (max-width: 1100px) {
+  .hero { --ms: .78; }
+  .card--crm { left: 1%; }
+  .card--chat { right: 1%; }
+}
+
 @media (max-width: 900px) {
   .nav__links { display: none; }
-  .hero-scene { height: 230vh; }
-  .visual { height: clamp(200px, 30vh, 260px); }
-  .card--crm { left: -4%; top: 0; }
-  .card--chat { right: -4%; top: 34%; }
-  .tools { display: none; }
+  .hero-scene { height: 300vh; }
+  .hero { --ms: .52; }
+  .card { display: none; }
+  .line { transform: translate3d(0, calc(var(--p) * var(--dir, 0) * 120px), 0); }
+  .line-gap { height: clamp(150px, 24vh, 240px); }
 }
 
 @media (max-width: 560px) {
-  .hero__inner { padding-top: 8vh; }
-  .card { font-size: 10px; padding: 10px 11px; }
-  .card--crm { width: 150px; }
-  .card--chat { width: 138px; }
-  .card__chart { height: 46px; }
-  .crystal { width: 190px; }
+  .line-gap { height: clamp(130px, 20vh, 190px); }
+
+  /* На телефоне подписи не масштабируем, а раскладываем заново:
+     пропорционально ужатый разлёт увёл бы их за края экрана. */
+  .hero { --ms: 1; }
+  .module { font-size: 9px; padding: 5px 9px; letter-spacing: .12em; }
+  .module:nth-child(1) { --x: -105; --y: -285; }
+  .module:nth-child(2) { --x:  105; --y: -215; }
+  .module:nth-child(3) { --x: -105; --y:  245; }
+  .module:nth-child(4) { --x:  105; --y:  315; }
+  .module:nth-child(5) { display: none; }   /* самая длинная подпись */
+
   .hero__actions { flex-direction: column; width: 100%; }
   .btn { text-align: center; }
 }
@@ -602,9 +630,11 @@ a { color: inherit; text-decoration: none; }
   html { scroll-behavior: auto; }
   .hero-scene { height: 100vh; }
   .hero { position: relative; }
+  .core, .modules, .ghost { display: none; }
+  .line-gap { height: 0; }   /* без ядра разрыв в заголовке не нужен */
   * { animation: none !important; }
-  .hero__canvas, .hero__glow, .visual, .crystal, .card, .tools,
-  .word, .hero__eyebrow, .hero__sub, .hero__actions, .hero__content {
+  .hero__canvas, .hero__glow, .card, .line, .word,
+  .hero__eyebrow, .hero__sub, .hero__actions {
     transform: none !important;
     opacity: 1 !important;
     filter: none !important;
